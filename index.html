@@ -11,9 +11,6 @@
         canvas {
             display: block;
             margin: 10px auto;
-        }
-
-        canvas {
             border: 1px solid black;
         }
     </style>
@@ -24,10 +21,13 @@
 
     <!-- Video feed for live camera capture -->
     <video id="video" width="320" height="240" autoplay></video>
-    <button id="captureBtn">Capture Image from Camera</button>
+    <div>
+        <button id="switchButton">Ganti Kamera</button>
+        <button id="captureBtn">Ambil Gambar</button>
+        <!-- File upload for image -->
+        <input type="file" id="fileInput" accept="image/*" >
+    </div>
 
-    <!-- File upload for image -->
-    <input type="file" id="fileInput" accept="image/*">
     <canvas id="outputCanvas" height="240"></canvas>
     <canvas id="fingerCanvas" height="240"></canvas>
 
@@ -35,10 +35,19 @@
         const video = document.getElementById('video');
         const canvas = document.getElementById('outputCanvas');
         const context = canvas.getContext('2d');
+        const cameraSwitchBtn = document.getElementById('switchButton');
         const captureBtn = document.getElementById('captureBtn');
         const fileInput = document.getElementById('fileInput');
 
-        // Access the camera feed
+        // Function to switch cameras
+        async function switchCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        }
+
+        // Event listener for camera switching button
+        cameraSwitchBtn.addEventListener('click', switchCamera);
+        // Access the camera feed (initially)
         navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
             video.srcObject = stream;
         }).catch(err => console.error("Camera error: ", err));
@@ -82,9 +91,9 @@
             // Threshold the image to create a mask
             let mask = new cv.Mat();
             cv.inRange(hsv, lower, upper, mask);
-            
+
             // Perform morphological transformations to remove noise
-            let kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5)); // Adjust kernel size if needed
+            let kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3, 3)); // Adjust kernel size if needed
             cv.morphologyEx(mask, mask, cv.MORPH_CLOSE, kernel);
 
             // Find contours in the mask
@@ -113,7 +122,7 @@
 
             // Apply Gaussian blur to the mask to smooth it
             let blurredMask = new cv.Mat();
-            let ksize = new cv.Size(19, 19);
+            let ksize = new cv.Size(5, 5);
             cv.GaussianBlur(mask2, blurredMask, ksize, 0);
 
             // Use the blurred mask to segment the hand region from the original image
