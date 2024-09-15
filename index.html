@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Finger Detection</title>
+    <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+    <style>
+        video,
+        canvas {
+            display: block;
+            margin: 10px auto;
+        }
+
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Simple Finger Detection</h1>
+
+    <!-- Video feed for live camera capture -->
+    <video id="video" width="320" height="240" autoplay></video>
+    <button id="captureBtn">Capture Image from Camera</button>
+
+    <!-- File upload for image -->
+    <input type="file" id="fileInput" accept="image/*">
+    <canvas id="outputCanvas" height="240"></canvas>
+    <canvas id="fingerCanvas" height="240"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('outputCanvas');
+        const context = canvas.getContext('2d');
+        const captureBtn = document.getElementById('captureBtn');
+        const fileInput = document.getElementById('fileInput');
+
+        // Access the camera feed
+        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+            video.srcObject = stream;
+        }).catch(err => console.error("Camera error: ", err));
+
+        // Capture frame from camera
+        captureBtn.addEventListener('click', () => {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            let imgData = context.getImageData(0, 0, canvas.width, canvas.height);
+            processImage(imgData);
+        });
+
+        // Handle file input and display the image
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    // Draw the uploaded image on the canvas
+                    context.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    let imgData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    processImage(imgData);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function processImage(imgData) {
+            let src = cv.matFromImageData(imgData);
+            let hsv = new cv.Mat();
+            cv.cvtColor(src, hsv, cv.COLOR_RGBA2BGR);
+            cv.cvtColor(hsv, hsv, cv.COLOR_BGR2HSV);
+
+            // Define the lower and upper bounds for skin color in HSV
+            let lower = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [0, 20, 70, 0]);
+            let upper = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [20, 255, 255, 255]);
+
+            // Threshold the image to create a mask
+            let mask = new cv.Mat();
+            cv.inRange(hsv, lower, upper, mask);
+            
+            // Perform morphological transformations to remove noise
+            let kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5)); // Adjust kernel size if needed
+            cv.morphologyEx(mask, mask, cv.MORPH_CLOSE, kernel);
+
+            // Find contours in the mask
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+            cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+            // Sort contours by area (descending order)
+            let contourArray = [];
+            for (let i = 0; i < contours.size(); i++) {
+                contourArray.push(contours.get(i));
+            }
+            contourArray.sort((a, b) => cv.contourArea(b) - cv.contourArea(a));
+
+            // Keep the largest 4 contours (assuming these are fingers)
+            let largestContours = contourArray.slice(0, 4);
+
+            // Create a binary mask using the largest contours
+            let mask2 = cv.Mat.zeros(mask.rows, mask.cols, cv.CV_8UC1);
+            for (let i = 0; i < largestContours.length; i++) {
+                let contourVec = new cv.MatVector();
+                contourVec.push_back(largestContours[i]);
+                cv.drawContours(mask2, contourVec, -1, new cv.Scalar(255, 255, 255), -1);
+                contourVec.delete(); // Clean up
+            }
+
+            // Apply Gaussian blur to the mask to smooth it
+            let blurredMask = new cv.Mat();
+            let ksize = new cv.Size(19, 19);
+            cv.GaussianBlur(mask2, blurredMask, ksize, 0);
+
+            // Use the blurred mask to segment the hand region from the original image
+            let handRegion = new cv.Mat();
+            cv.bitwise_and(src, src, handRegion, blurredMask);
+
+            // Convert the hand region to grayscale
+            let grayHand = new cv.Mat();
+            cv.cvtColor(handRegion, grayHand, cv.COLOR_BGR2GRAY);
+
+            // Apply adaptive thresholding to enhance the features (fingers, lines, etc.)
+            let threshHand = new cv.Mat();
+            cv.adaptiveThreshold(grayHand, threshHand, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+
+            // Extract individual finger regions based on the bounding boxes of contours
+            let fingerCanvas = document.getElementById('fingerCanvas');
+            let fingerCtx = fingerCanvas.getContext('2d');
+            fingerCanvas.width = 400;
+            fingerCanvas.height = 400;
+            fingerCtx.clearRect(0, 0, fingerCanvas.width, fingerCanvas.height);
+
+            largestContours.forEach((contour, index) => {
+                let rect = cv.boundingRect(contour);
+                let finger = threshHand.roi(rect);
+
+                // Draw each finger region on a separate part of the canvas
+                let posX = (index % 2) * (fingerCanvas.width / 2);
+                let posY = Math.floor(index / 2) * (fingerCanvas.height / 2);
+                cv.imshow(fingerCanvas, finger, posX, posY);  // Display each finger
+            });
+
+            // Display the segmented hand with adaptive thresholding on the main canvas
+            cv.imshow('outputCanvas', threshHand);
+
+            // Cleanup
+            src.delete(); hsv.delete(); lower.delete(); upper.delete();
+            mask.delete(); contours.delete(); hierarchy.delete();
+            mask2.delete(); blurredMask.delete(); handRegion.delete();
+            grayHand.delete(); threshHand.delete();
+        }
+
+    </script>
+</body>
+
+</html>
