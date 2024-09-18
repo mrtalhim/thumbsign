@@ -128,7 +128,7 @@
             cv.cvtColor(hsv, hsv, cv.COLOR_BGR2HSV);
 
             // Define the lower and upper bounds for skin color in HSV
-            let lower = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [120, 40, 40, 0]);
+            let lower = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [120, 20, 50, 0]);
             let upper = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [160, 255, 255, 255]);
 
             // Threshold the image to create a mask
