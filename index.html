@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simple Finger Detection</title>
-    <script src="https://docs.opencv.org/4.x/opencv.js"></script>
+    <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
     <style>
         video,
         canvas {
@@ -35,7 +35,7 @@
         const video = document.getElementById('video');
         const canvas = document.getElementById('outputCanvas');
         const context = canvas.getContext('2d');
-        const cameraSwitchBtn = document.getElementById('switchButton');
+        // const cameraSwitchBtn = document.getElementById('switchButton');
         const captureBtn = document.getElementById('captureBtn');
         const fileInput = document.getElementById('fileInput');
 
@@ -46,9 +46,9 @@
         }
 
         // Event listener for camera switching button
-        cameraSwitchBtn.addEventListener('click', switchCamera);
+        // cameraSwitchBtn.addEventListener('click', switchCamera);
         // Access the camera feed (initially)
-        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+        navigator.mediaDevices.getUserMedia({ video: true, facingMode: 'environment' }).then(stream => {
             video.srcObject = stream;
         }).catch(err => console.error("Camera error: ", err));
 
