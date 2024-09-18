@@ -22,7 +22,8 @@
     <!-- Video feed for live camera capture -->
     <video id="video" width="320" height="240" autoplay></video>
     <div>
-        <!-- <button id="switchButton">Ganti Kamera</button> -->
+        <button id="switchButton">Ganti Kamera</button>
+        <select id="selectCamera"></select>
         <button id="captureBtn">Ambil Gambar</button>
         <!-- File upload for image -->
         <input type="file" id="fileInput" accept="image/*" >
@@ -35,18 +36,60 @@
         const video = document.getElementById('video');
         const canvas = document.getElementById('outputCanvas');
         const context = canvas.getContext('2d');
-        // const cameraSwitchBtn = document.getElementById('switchButton');
+        const cameraSwitchBtn = document.getElementById('switchButton');
         const captureBtn = document.getElementById('captureBtn');
         const fileInput = document.getElementById('fileInput');
+        const select = document.getElementById('selectCamera');
+
+        function gotDevices(mediaDevices) {
+            select.innerHTML = '';
+            select.appendChild(document.createElement('option'));
+            let count = 1;
+            mediaDevices.forEach(mediaDevice => {
+              if (mediaDevice.kind === 'videoinput') {
+                const option = document.createElement('option');
+                option.value = mediaDevice.deviceId;
+                const label = mediaDevice.label || `Camera ${count++}`;
+                const textNode = document.createTextNode(label);
+                option.appendChild(textNode);
+                select.appendChild(option);
+              }
+            });
+          }
 
         // Function to switch cameras
         async function switchCamera() {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
+            if (typeof currentStream !== 'undefined') {
+            stopMediaTracks(currentStream);
+          }
+          const videoConstraints = {};
+          if (select.value === '') {
+            videoConstraints.facingMode = 'environment';
+          } else {
+            videoConstraints.deviceId = { exact: select.value };
+          }
+          const constraints = {
+            video: videoConstraints,
+            audio: false
+          };
+        
+          navigator.mediaDevices
+            .getUserMedia(constraints)
+            .then(stream => {
+              currentStream = stream;
+              video.srcObject = stream;
+              return navigator.mediaDevices.enumerateDevices();
+            })
+            .then(gotDevices)
+            .catch(error => {
+              console.error(error);
+            });
+            // const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            // video.srcObject = stream;
         }
 
         // Event listener for camera switching button
-        // cameraSwitchBtn.addEventListener('click', switchCamera);
+        cameraSwitchBtn.addEventListener('click', switchCamera);
         // Access the camera feed (initially)
         navigator.mediaDevices.getUserMedia({ video: true, facingMode: 'environment' }).then(stream => {
             video.srcObject = stream;
@@ -163,6 +206,8 @@
             mask2.delete(); blurredMask.delete(); handRegion.delete();
             grayHand.delete(); threshHand.delete();
         }
+
+        navigator.mediaDevices.enumerateDevices().then(gotDevices);
 
     </script>
 </body>
